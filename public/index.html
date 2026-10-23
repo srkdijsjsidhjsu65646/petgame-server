@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小鲨鲨管理后台</title>
+<style>
+body{background:#1a1a2e;color:#eee;font-family:system-ui;margin:0;padding:16px}
+h1{color:#ffd700;font-size:22px}
+h2{color:#e94560;font-size:18px;margin-top:24px}
+.login{max-width:300px;margin:80px auto;text-align:center}
+.login input{width:100%;padding:10px;margin:6px 0;background:#16213e;border:1px solid #0f3460;color:#eee;border-radius:6px}
+button{background:#e94560;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin:2px}
+button.gold{background:#ffd700;color:#000}
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{padding:8px;text-align:center;border-bottom:1px solid #0f3460}
+th{color:#ffd700}
+tr:hover{background:#16213e}
+.edit{background:#0f3460;color:#fff;padding:4px 10px;border-radius:4px;border:none;cursor:pointer}
+input,textarea{background:#16213e;border:1px solid #0f3460;color:#eee;border-radius:6px;padding:8px;margin:4px 0;width:300px}
+textarea{height:80px}
+</style>
+</head>
+<body>
+
+<div class="login" id="loginBox">
+  <h1>🔐 管理后台</h1>
+  <input type="password" id="pwd" placeholder="管理员密码" onkeydown="if(event.key==='enter')login()">
+  <button onclick="login()">登录</button>
+</div>
+
+<div id="mainBox" style="display:none">
+  <h1>🐬 小鲨鲨用户管理</h1>
+  <button class="gold" onclick="loadUsers()">刷新用户</button>
+  <button onclick="logout()">退出</button>
+  <div id="userList"></div>
+
+  <h2>📢 发布公告</h2>
+  <input type="text" id="annTitle" placeholder="公告标题">
+  <br>
+  <textarea id="annContent" placeholder="公告内容"></textarea>
+  <br>
+  <button class="gold" onclick="postAnnounce()">发布公告</button>
+  <button onclick="loadAnnouncements()">查看历史公告</button>
+  <div id="annList"></div>
+</div>
+
+<script>
+let pwd = '';
+function login(){
+  pwd = document.getElementById('pwd').value;
+  loadUsers();
+}
+function logout(){ pwd=''; document.getElementById('mainBox').style.display='none'; document.getElementById('loginBox').style.display='block'; }
+
+async function api(path, opts={}){
+  opts.headers = {'Content-Type':'application/json','X-Admin-Password':pwd};
+  if(opts.body) opts.body = JSON.stringify(opts.body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+async function loadUsers(){
+  const users = await api('/api/admin/users');
+  if(users.error){ alert(users.error); return; }
+  document.getElementById('loginBox').style.display='none';
+  document.getElementById('mainBox').style.display='block';
+  let html = '<table><tr><th>ID</th><th>用户名</th><th>金币</th><th>VIP</th><th>饱腹</th><th>卫生</th><th>精力</th><th>操作</th></tr>';
+  for(const u of users){
+    html += `<tr><td>${u.id}</td><td>${u.username}</td><td>${u.gold}</td><td>${u.is_vip?'⭐':'-'}</td><td>${u.fullness}</td><td>${u.hygiene}</td><td>${u.energy}</td><td><button class="edit" onclick="editUser(${u.id})">编辑</button></td></tr>`;
+  }
+  html += '</table>';
+  document.getElementById('userList').innerHTML = html;
+}
+
+async function editUser(id){
+  const fields = ['gold','fullness','hygiene','energy','food_croissant','food_hamburger','food_chicken','is_vip'];
+  for(const f of fields){
+    const v = prompt('修改 '+f+' 的值:');
+    if(v !== null && v !== ''){
+      await api('/api/admin/set', {method:'POST', body:{id, field:f, value:parseInt(v)||v}});
+    }
+  }
+  loadUsers();
+}
+
+async function postAnnounce(){
+  const title = document.getElementById('annTitle').value;
+  const content = document.getElementById('annContent').value;
+  if(!title || !content){ alert('请填写标题和内容'); return; }
+  const r = await api('/api/admin/announce', {method:'POST', body:{title, content}});
+  if(r.ok){ alert('公告已发布'); document.getElementById('annTitle').value=''; document.getElementById('annContent').value=''; loadAnnouncements(); }
+  else alert(r.error);
+}
+
+async function loadAnnouncements(){
+  const rows = await api('/api/admin/announcements');
+  let html = '<table><tr><th>ID</th><th>标题</th><th>内容</th></tr>';
+  for(const a of rows){
+    html += `<tr><td>${a.id}</td><td>${a.title}</td><td>${a.content}</td></tr>`;
+  }
+  html += '</table>';
+  document.getElementById('annList').innerHTML = html;
+}
+</script>
+</body>
+</html>
