@@ -1,38 +1,46 @@
-const Database = require('better-sqlite3');
+const fs = require('fs');
 const path = require('path');
+const DB_FILE = path.join(__dirname, 'data.json');
 
-const db = new Database(path.join(__dirname, 'data.db'));
+let data = { users: [], announcements: [], nextUserId: 1 };
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  token TEXT,
-  token_expires INTEGER,
-  gold INTEGER DEFAULT 9999,
-  fullness INTEGER DEFAULT 0,
-  hygiene INTEGER DEFAULT 100,
-  energy INTEGER DEFAULT 100,
-  food_croissant INTEGER DEFAULT 50,
-  food_hamburger INTEGER DEFAULT 50,
-  food_chicken INTEGER DEFAULT 50,
-  has_helmet INTEGER DEFAULT 0,
-  helmet_equipped INTEGER DEFAULT 0,
-  is_vip INTEGER DEFAULT 0,
-  last_vip_date TEXT DEFAULT '',
-  created_at INTEGER DEFAULT (strftime('%s','now')),
-  updated_at INTEGER DEFAULT (strftime('%s','now'))
-);
-`);
+function load() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    }
+  } catch(e) { console.error('DB load error:', e); }
+}
+function save() {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+load();
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS announcements (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  created_at INTEGER DEFAULT (strftime('%s','now'))
-);
-`);
-
-module.exports = db;
+module.exports = {
+  findUser: (username) => data.users.find(u => u.username === username),
+  findUserById: (id) => data.users.find(u => u.id === id),
+  findUserByToken: (token) => data.users.find(u => u.token === token && u.token_expires > Date.now()),
+  createUser: (username, passwordHash, token, expires) => {
+    const user = {
+      id: data.nextUserId++, username, password_hash: passwordHash, token,
+      token_expires: expires, gold: 9999, fullness: 0, hygiene: 100, energy: 100,
+      food_croissant: 50, food_hamburger: 50, food_chicken: 50,
+      has_helmet: 0, helmet_equipped: 0, is_vip: 0, last_vip_date: '',
+      created_at: Date.now(), updated_at: Date.now()
+    };
+    data.users.push(user); save();
+    return user;
+  },
+  updateUser: (id, updates) => {
+    const u = data.users.find(x => x.id === id);
+    if(u) { Object.assign(u, updates, { updated_at: Date.now() }); save(); }
+    return u;
+  },
+  allUsers: () => data.users,
+  addAnnouncement: (title, content) => {
+    data.announcements.unshift({ id: Date.now(), title, content, created_at: Date.now() });
+    save();
+  },
+  latestAnnouncement: () => data.announcements[0] || null,
+  allAnnouncements: () => data.announcements
+};
